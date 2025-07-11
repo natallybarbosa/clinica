@@ -7,17 +7,26 @@ import br.ufms.clinicamedica.model.Paciente;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
-
+import java.util.Optional;
 
 public class ConsultaRepository extends FileRepository<Consulta, String> {
-    private final MedicoRepository medicoRepository;
-    private final PacienteRepository pacienteRepository;
 
-    public ConsultaRepository(MedicoRepository medicoRepository, PacienteRepository pacienteRepository) {
+    private MedicoRepository medicoRepository;
+    private PacienteRepository pacienteRepository;
+
+    // deixar ele vazio até o momento
+    public ConsultaRepository() {
         super("consulta");
+    }
+
+    // metodo para injetar os repositórios depois que o super já rodou
+    public void inicializarRepositorios(MedicoRepository medicoRepository, PacienteRepository pacienteRepository) {
         this.medicoRepository = medicoRepository;
         this.pacienteRepository = pacienteRepository;
 
+        // tam que recarregar os dados com os repositórios prontos pra não dar null
+        this.repository.clear();// limpa o map
+        this.repository.putAll(super.load());// vai chamar o load novamente, agr com os dados
     }
 
     @Override
@@ -27,7 +36,7 @@ public class ConsultaRepository extends FileRepository<Consulta, String> {
 
     @Override
     protected String entityToText(Consulta consulta) {
-   return String.format(
+        return String.format(
                 "%s|%s|%s|%s|%s|%.2f|%s|%s",
                 consulta.getCodigo(),
                 consulta.getMedico().getCpf(),
@@ -36,51 +45,49 @@ public class ConsultaRepository extends FileRepository<Consulta, String> {
                 consulta.getDataHora(),
                 consulta.getValor(),
                 consulta.getReceita() == null ? "null" : consulta.getReceita(),
-                consulta.getExames() == null ? "null" : consulta.getExames()
+                consulta.getExames() == null ? "null" : String.join(";", consulta.getExames())
         );
     }
 
     @Override
     protected Consulta textToEntity(String line) {
         String[] parts = line.split("\\|");
+        String cpfMed = parts[1];
+        String cpfPac = parts[2];
 
-        // Busca o mEdico pelo CPF
         Medico medico = null;
-        try {
-            for (Medico medico1 : medicoRepository.getAll()) {
-                if (medicoRepository.getId(medico1).equals(parts[1])) {
-                    medico = medico1;
-                    break;
-                }
-            }
-        } catch (Exception e) {
-            throw new RuntimeException("Erro ao buscar médico: " + e.getMessage());
-        }
-
         Paciente paciente = null;
-        try {
-            for (Paciente paciente1 : pacienteRepository.getAll()) {
-                if (pacienteRepository.getId(paciente1).equals(parts[2])) {
-                    paciente = paciente1;
-                    break;
+
+        if (medicoRepository != null && pacienteRepository != null) {
+            try {
+                Optional<Medico> medicoEnvelope = medicoRepository.get(cpfMed);
+                if (medicoEnvelope.isPresent()) {
+                    medico = medicoEnvelope.get();
+                } else {
+                    throw new RuntimeException("Médico não encontrado: " + cpfMed);
                 }
+
+                Optional<Paciente> pacienteEnvelope = pacienteRepository.get(cpfPac);
+                if (pacienteEnvelope.isPresent()) {
+                    paciente = pacienteEnvelope.get();
+                } else {
+                    throw new RuntimeException("Paciente não encontrado: " + cpfPac);
+                }
+            } catch (Exception e) {
+                throw new RuntimeException("Erro ao buscar médico ou paciente: " + e.getMessage());
             }
-            if (paciente == null) {
-                throw new RuntimeException("Paciente não encontrado: " + parts[2]);
-            }
-        } catch (Exception e) {
-            throw new RuntimeException("Erro ao buscar paciente: " + e.getMessage());
+        } else {
+
         }
 
         Consulta consulta = new Consulta(
                 medico,
                 paciente,
-                parts[3], // sintomas
+                parts[3],
                 LocalDateTime.parse(parts[4]),
-                Double.parseDouble(parts[5])
+                Double.parseDouble(parts[5].replace(",", "."))// pra aceitar virgula
         );
 
-        // checa se não é nula
         if (!parts[6].equals("null")) {
             consulta.setReceita(parts[6]);
         }
@@ -90,6 +97,7 @@ public class ConsultaRepository extends FileRepository<Consulta, String> {
         } else {
             consulta.setExames(new ArrayList<>());
         }
+
         return consulta;
     }
 }
