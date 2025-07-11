@@ -14,7 +14,8 @@ public class Main {
         MedicoRepository medicoRepo = new MedicoRepository();
         PacienteRepository pacienteRepo = new PacienteRepository();
         SecretarioRepository secretarioRepo = new SecretarioRepository();
-        ConsultaRepository consultaRepo = new ConsultaRepository(medicoRepo,pacienteRepo);
+        ConsultaRepository consultaRepo = new ConsultaRepository();
+        consultaRepo.inicializarRepositorios(medicoRepo, pacienteRepo); //
 
         // Inicializa serviços
         MedicoService medicoService = new MedicoService(medicoRepo, consultaRepo);
@@ -135,3 +136,4 @@ public class Main {
         }
     }
 }
+
